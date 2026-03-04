@@ -4,7 +4,7 @@
 
 const API = 'https://api.pota.app';
 const MAX_ROWS = 10;
-const WIDGET_HOST = 'https://potastats.brimbis.workers.dev/'; // Update to your worker URL
+const WIDGET_HOST = 'potastats.brimbis.workers.dev'; // Update to your worker URL
 
 export default {
   async fetch(request) {
