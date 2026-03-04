@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>POTA Stats // GoldSrc</title>
+<style>
+  /* ── RESET ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ── FONTS ── */
+  @font-face {
+    font-family: 'HLFont';
+    src: local('Courier New'), local('Consolas'), local('monospace');
+  }
+
+  :root {
+    --bg-dark: #0a0a08;
+    --bg-panel: #1a1a14;
+    --bg-panel-inner: #111110;
+    --bg-highlight: #2a2a1a;
+    --border-outer: #3a3a28;
+    --border-inner: #222218;
+    --border-bevel-light: #4a4a34;
+    --border-bevel-dark: #0d0d08;
+    --text-amber: #ff8c00;
+    --text-amber-dim: #b86800;
+    --text-amber-bright: #ffaa22;
+    --text-green: #4aff4a;
+    --text-green-dim: #2a9a2a;
+    --text-white: #ccccaa;
+    --text-gray: #666650;
+    --accent-lambda: #ff6600;
+    --scanline-opacity: 0.03;
+  }
+
+  body {
+    background: var(--bg-dark);
+    color: var(--text-amber);
+    font-family: 'Courier New', Consolas, 'Lucida Console', monospace;
+    font-size: 13px;
+    line-height: 1.4;
+    overflow-x: hidden;
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: unset;
+  }
+
+  /* ── SCANLINES OVERLAY ── */
+  body::after {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ── CRT GLOW ── */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.4) 100%);
+    pointer-events: none;
+    z-index: 9998;
+  }
+
+  /* ── MAIN CONTAINER ── */
+  #app {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 8px;
+  }
+
+  /* ── GOLDSRC BEVELED PANEL ── */
+  .gs-panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-outer);
+    border-top-color: var(--border-bevel-light);
+    border-left-color: var(--border-bevel-light);
+    border-bottom-color: var(--border-bevel-dark);
+    border-right-color: var(--border-bevel-dark);
+    margin-bottom: 6px;
+    position: relative;
+  }
+
+  .gs-panel-inner {
+    background: var(--bg-panel-inner);
+    border: 1px solid var(--border-inner);
+    border-top-color: var(--border-bevel-dark);
+    border-left-color: var(--border-bevel-dark);
+    border-bottom-color: var(--border-bevel-light);
+    border-right-color: var(--border-bevel-light);
+    margin: 3px;
+    padding: 10px 14px;
+  }
+
+  /* ── HEADER BAR ── */
+  .gs-header {
+    background: linear-gradient(180deg, #2a2a18 0%, #1a1a10 100%);
+    padding: 2px 0;
+  }
+
+  .gs-header .gs-panel-inner {
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .lambda {
+    color: var(--accent-lambda);
+    font-size: 28px;
+    font-weight: bold;
+    line-height: 1;
+    text-shadow: 0 0 8px rgba(255, 102, 0, 0.5), 0 0 20px rgba(255, 102, 0, 0.2);
+    font-family: Georgia, serif;
+  }
+
+  .header-text {
+    flex: 1;
+  }
+
+  .header-title {
+    color: var(--text-amber-bright);
+    font-size: 16px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    text-shadow: 0 0 6px rgba(255, 140, 0, 0.3);
+  }
+
+  .header-sub {
+    color: var(--text-gray);
+    font-size: 11px;
+    letter-spacing: 1px;
+    margin-top: 2px;
+  }
+
+  .header-callsign {
+    color: var(--text-green);
+    font-size: 22px;
+    font-weight: bold;
+    letter-spacing: 3px;
+    text-shadow: 0 0 10px rgba(74, 255, 74, 0.3);
+  }
+
+  /* ── SEPARATOR ── */
+  .gs-sep {
+    height: 2px;
+    background: linear-gradient(90deg,
+      transparent 0%,
+      var(--border-bevel-light) 10%,
+      var(--text-amber-dim) 50%,
+      var(--border-bevel-light) 90%,
+      transparent 100%
+    );
+    margin: 4px 0;
+    opacity: 0.5;
+  }
+
+  /* ── SECTION TITLES ── */
+  .section-title {
+    color: var(--text-amber-bright);
+    font-size: 13px;
+    font-weight: bold;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    padding: 6px 0 4px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .section-title::before {
+    content: '►';
+    color: var(--accent-lambda);
+    font-size: 10px;
+  }
+
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, var(--text-amber-dim) 0%, transparent 100%);
+  }
+
+  /* ── STAT ROWS ── */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 20px;
+  }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 3px 0;
+    border-bottom: 1px dotted rgba(58, 58, 40, 0.4);
+  }
+
+  .stat-row:last-child {
+    border-bottom: none;
+  }
+
+  .stat-label {
+    color: var(--text-gray);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .stat-value {
+    color: var(--text-green);
+    font-size: 14px;
+    font-weight: bold;
+    text-shadow: 0 0 4px rgba(74, 255, 74, 0.15);
+  }
+
+  .stat-value.amber {
+    color: var(--text-amber);
+    text-shadow: 0 0 4px rgba(255, 140, 0, 0.15);
+  }
+
+  .stat-value.bright {
+    color: var(--text-amber-bright);
+    font-size: 18px;
+    text-shadow: 0 0 6px rgba(255, 170, 34, 0.3);
+  }
+
+  /* ── AWARDS TABLE ── */
+  .awards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 4px;
+  }
+
+  .award-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: rgba(26, 26, 14, 0.6);
+    border: 1px solid var(--border-inner);
+  }
+
+  .award-icon {
+    width: 10px;
+    height: 10px;
+    border: 1px solid var(--text-amber-dim);
+    background: var(--bg-dark);
+    flex-shrink: 0;
+  }
+
+  .award-icon.earned {
+    background: var(--text-amber);
+    border-color: var(--text-amber-bright);
+    box-shadow: 0 0 4px rgba(255, 140, 0, 0.5);
+  }
+
+  .award-name {
+    color: var(--text-white);
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .award-name.dim {
+    color: var(--text-gray);
+  }
+
+  /* ── STATUS / LOADING ── */
+  .status-msg {
+    text-align: center;
+    padding: 30px;
+    color: var(--text-amber-dim);
+    font-size: 14px;
+    letter-spacing: 2px;
+  }
+
+  .status-msg.error {
+    color: #ff4444;
+  }
+
+  @keyframes blink-cursor {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0; }
+  }
+
+  .cursor-blink {
+    animation: blink-cursor 1s infinite;
+    color: var(--text-amber);
+  }
+
+  @keyframes scan {
+    0% { top: 0; }
+    100% { top: 100%; }
+  }
+
+  .scanning-line {
+    position: absolute;
+    left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(255, 140, 0, 0.15), transparent);
+    animation: scan 3s linear infinite;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  /* ── CONDENSED MODE ── */
+  .condensed .gs-panel-inner {
+    padding: 6px 10px;
+  }
+  .condensed .stat-grid {
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 2px 12px;
+  }
+  .condensed .stat-row {
+    padding: 1px 0;
+  }
+  .condensed .stat-label {
+    font-size: 10px;
+  }
+  .condensed .stat-value {
+    font-size: 12px;
+  }
+  .condensed .section-title {
+    font-size: 11px;
+    padding: 3px 0 2px;
+  }
+  .condensed .awards-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+  .condensed .header-title { font-size: 13px; }
+  .condensed .header-callsign { font-size: 17px; }
+  .condensed .lambda { font-size: 22px; }
+
+  /* ── FOOTER ── */
+  .gs-footer {
+    text-align: center;
+    padding: 6px;
+    color: var(--text-gray);
+    font-size: 10px;
+    letter-spacing: 1px;
+  }
+
+  .gs-footer a {
+    color: var(--text-amber-dim);
+    text-decoration: none;
+  }
+
+  .gs-footer a:hover {
+    color: var(--text-amber);
+    text-decoration: underline;
+  }
+
+  /* ── HELP PAGE ── */
+  .help-section {
+    padding: 16px;
+  }
+
+  .help-section h2 {
+    color: var(--text-amber-bright);
+    font-size: 15px;
+    letter-spacing: 2px;
+    margin-bottom: 12px;
+  }
+
+  .help-section p, .help-section li {
+    color: var(--text-white);
+    font-size: 12px;
+    line-height: 1.6;
+    margin-bottom: 8px;
+  }
+
+  .help-section code {
+    background: var(--bg-dark);
+    color: var(--text-green);
+    padding: 2px 6px;
+    border: 1px solid var(--border-inner);
+    font-size: 11px;
+    word-break: break-all;
+  }
+
+  .help-section ul {
+    list-style: none;
+    padding-left: 16px;
+  }
+
+  .help-section li::before {
+    content: '► ';
+    color: var(--accent-lambda);
+    font-size: 9px;
+  }
+
+  .code-block {
+    background: var(--bg-dark);
+    border: 1px solid var(--border-outer);
+    padding: 10px 14px;
+    margin: 8px 0 14px;
+    overflow-x: auto;
+    font-size: 11px;
+    color: var(--text-green);
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  .code-block .comment { color: var(--text-gray); }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="status-msg">
+    LOADING<span class="cursor-blink">_</span>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ── Parse URL Parameters ──
+  const params = new URLSearchParams(window.location.search);
+  const callsign = (params.get('call') || params.get('callsign') || '').toUpperCase().trim();
+  const optionsRaw = (params.get('options') || '').toLowerCase();
+  const options = optionsRaw.split(',').map(o => o.trim()).filter(Boolean);
+  const isCondensed = options.includes('condensed');
+  const isHunterOnly = options.includes('hunteronly');
+  const isActivatorOnly = options.includes('activatoronly');
+  const showHelp = params.has('help');
+  const isDemo = params.has('demo');
+
+  // ══════════════════════════════════════════════
+  // Host config — change this to your actual domain
+  const WIDGET_HOST = 'bremblo.github.io/potastats';
+  // ══════════════════════════════════════════════
+
+  const app = document.getElementById('app');
+  if (isCondensed) app.classList.add('condensed');
+
+  // ── Show Help ──
+  if (showHelp || (!callsign && !isDemo)) {
+    renderHelp();
+    return;
+  }
+
+  // ── Demo mode for testing without API ──
+  if (isDemo) {
+    const demoCall = callsign || 'N0CALL';
+    const demoData = {
+      callsign: demoCall,
+      name: 'Demo Operator',
+      gravatar: '',
+      activator: { activations: 47, parks: 31, qsos: 1823, attempts: 52 },
+      hunter: { parks: 214, qsos: 3456 },
+    };
+    render(demoCall, demoData, [
+      { name: 'Activator Bronze', completed: true },
+      { name: 'Activator Silver', completed: true },
+      { name: 'Activator Gold', completed: false },
+      { name: 'Hunter Bronze', completed: true },
+      { name: 'Hunter Silver', completed: true },
+      { name: 'Hunter Gold', completed: true },
+      { name: 'Repeat Offender', completed: true },
+      { name: 'Kilo Activator', completed: false },
+    ]);
+    return;
+  }
+
+  // ── Fetch & Render ──
+  fetchStats(callsign);
+
+  async function fetchStats(call) {
+    app.innerHTML = `
+      <div class="gs-panel gs-header">
+        <div class="gs-panel-inner">
+          <div class="lambda">λ</div>
+          <div class="header-text">
+            <div class="header-title">POTA STATS</div>
+            <div class="header-sub">GOLDSRC EDITION // PARKS ON THE AIR</div>
+          </div>
+        </div>
+      </div>
+      <div class="gs-panel" style="position:relative;">
+        <div class="scanning-line"></div>
+        <div class="gs-panel-inner">
+          <div class="status-msg">CONNECTING TO POTA.APP<span class="cursor-blink">_</span></div>
+        </div>
+      </div>
+    `;
+
+    try {
+      const resp = await fetch(`https://api.pota.app/stats/user/${encodeURIComponent(call)}`);
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+      }
+      const data = await resp.json();
+
+      // Also try to fetch awards
+      let awards = [];
+      try {
+        const awardsResp = await fetch(`https://api.pota.app/profile/awards/${encodeURIComponent(call)}`);
+        if (awardsResp.ok) {
+          awards = await awardsResp.json();
+        }
+      } catch(e) { /* awards are optional */ }
+
+      render(call, data, awards);
+    } catch (err) {
+      app.innerHTML = `
+        <div class="gs-panel gs-header">
+          <div class="gs-panel-inner">
+            <div class="lambda">λ</div>
+            <div class="header-text">
+              <div class="header-title">POTA STATS</div>
+              <div class="header-sub">GOLDSRC EDITION</div>
+            </div>
+            <div class="header-callsign">${esc(call)}</div>
+          </div>
+        </div>
+        <div class="gs-panel">
+          <div class="gs-panel-inner">
+            <div class="status-msg error">
+              ERROR: ${esc(err.message)}<br><br>
+              <span style="color:var(--text-gray);font-size:11px;">
+                Could not retrieve stats for ${esc(call)}.<br>
+                Verify the callsign is registered at pota.app
+              </span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  function render(call, data, awards) {
+    // The POTA stats/user endpoint may return various field structures
+    // Handle both nested and flat formats
+    const act = data.activator || data.activatorStats || {};
+    const hunt = data.hunter || data.hunterStats || {};
+    const name = data.name || data.firstName || '';
+    const gravatar = data.gravatar || data.avatar || '';
+
+    // Normalize field access (API may use camelCase or snake_case)
+    const getVal = (obj, ...keys) => {
+      for (const k of keys) {
+        if (obj[k] !== undefined && obj[k] !== null) return obj[k];
+      }
+      return undefined;
+    };
+
+    const actActivations = getVal(act, 'activations', 'activation_count', 'activationCount') || 0;
+    const actParks = getVal(act, 'parks', 'park_count', 'parkCount', 'uniqueParks') || 0;
+    const actQsos = getVal(act, 'qsos', 'qso_count', 'qsoCount', 'totalQsos') || 0;
+    const actAttempts = getVal(act, 'attempts', 'attempt_count', 'attemptCount') || 0;
+
+    const huntParks = getVal(hunt, 'parks', 'park_count', 'parkCount', 'uniqueParks') || 0;
+    const huntQsos = getVal(hunt, 'qsos', 'qso_count', 'qsoCount', 'totalQsos') || 0;
+
+    let html = '';
+
+    // ── Header ──
+    html += `
+      <div class="gs-panel gs-header">
+        <div class="gs-panel-inner">
+          <div class="lambda">λ</div>
+          <div class="header-text">
+            <div class="header-title">POTA STATS</div>
+            <div class="header-sub">GOLDSRC EDITION // PARKS ON THE AIR</div>
+          </div>
+          <div class="header-callsign">${esc(call)}</div>
+        </div>
+      </div>
+    `;
+
+    // ── Operator Info ──
+    if (name && !isCondensed) {
+      html += `
+        <div class="gs-panel">
+          <div class="gs-panel-inner">
+            <div class="stat-row">
+              <span class="stat-label">OPERATOR</span>
+              <span class="stat-value amber">${esc(name)}</span>
+            </div>
+            ${gravatar ? `
+            <div class="stat-row">
+              <span class="stat-label">GRAVATAR</span>
+              <span class="stat-value" style="font-size:11px;color:var(--text-gray);">${esc(gravatar.substring(0, 20))}...</span>
+            </div>` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    // ── Activator Stats ──
+    if (!isHunterOnly) {
+      html += renderActivatorSection({ activations: actActivations, parks: actParks, qsos: actQsos, attempts: actAttempts }, isCondensed);
+    }
+
+    // ── Hunter Stats ──
+    if (!isActivatorOnly) {
+      html += renderHunterSection({ parks: huntParks, qsos: huntQsos }, isCondensed);
+    }
+
+    // ── Awards ──
+    if (awards && awards.length > 0 && !isCondensed) {
+      html += renderAwardsSection(awards);
+    }
+
+    // ── Footer ──
+    html += `
+      <div class="gs-footer">
+        DATA FROM <a href="https://pota.app/#/profile/${esc(call)}" target="_blank" rel="noopener">POTA.APP</a>
+        &nbsp;&middot;&nbsp; GOLDSRC THEME BY
+        <a href="https://${esc(WIDGET_HOST)}" target="_blank" rel="noopener">${esc(WIDGET_HOST)}</a>
+        &nbsp;&middot;&nbsp; <a href="?help">HELP</a>
+      </div>
+    `;
+
+    app.innerHTML = html;
+  }
+
+  function renderActivatorSection(act, condensed) {
+    const activations = num(act.activations);
+    const parks = num(act.parks);
+    const qsos = num(act.qsos);
+    const attempts = num(act.attempts);
+    const hasData = act.qsos > 0 || act.activations > 0;
+
+    if (condensed) {
+      return `
+        <div class="gs-panel">
+          <div class="gs-panel-inner">
+            <div class="section-title">ACTIVATOR</div>
+            <div class="stat-grid">
+              ${statRow('Activations', activations)}
+              ${statRow('Parks', parks)}
+              ${statRow('QSOs', qsos, 'bright')}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="gs-panel" style="position:relative;">
+        <div class="scanning-line"></div>
+        <div class="gs-panel-inner">
+          <div class="section-title">ACTIVATOR STATS</div>
+          <div class="gs-sep"></div>
+          <div class="stat-grid">
+            ${statRow('Total QSOs', qsos, 'bright')}
+            ${statRow('Activations', activations)}
+            ${statRow('Unique Parks', parks)}
+            ${statRow('Attempts', attempts)}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderHunterSection(hunt, condensed) {
+    const parks = num(hunt.parks);
+    const qsos = num(hunt.qsos);
+
+    if (condensed) {
+      return `
+        <div class="gs-panel">
+          <div class="gs-panel-inner">
+            <div class="section-title">HUNTER</div>
+            <div class="stat-grid">
+              ${statRow('Parks Hunted', parks)}
+              ${statRow('QSOs', qsos, 'bright')}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="gs-panel" style="position:relative;">
+        <div class="scanning-line"></div>
+        <div class="gs-panel-inner">
+          <div class="section-title">HUNTER STATS</div>
+          <div class="gs-sep"></div>
+          <div class="stat-grid">
+            ${statRow('Total QSOs', qsos, 'bright')}
+            ${statRow('Parks Hunted', parks)}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderAwardsSection(awards) {
+    if (!awards || awards.length === 0) return '';
+
+    let items = '';
+    for (const a of awards) {
+      const earned = a.completed || a.granted;
+      const name = a.name || a.title || a.award || 'Unknown';
+      items += `
+        <div class="award-item">
+          <div class="award-icon ${earned ? 'earned' : ''}"></div>
+          <div class="award-name ${earned ? '' : 'dim'}">${esc(name)}</div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="gs-panel">
+        <div class="gs-panel-inner">
+          <div class="section-title">AWARDS</div>
+          <div class="gs-sep"></div>
+          <div class="awards-grid">${items}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  function statRow(label, value, cls) {
+    return `
+      <div class="stat-row">
+        <span class="stat-label">${esc(label)}</span>
+        <span class="stat-value ${cls || ''}">${value}</span>
+      </div>
+    `;
+  }
+
+  function num(v) {
+    if (v === undefined || v === null) return '—';
+    const n = Number(v);
+    if (isNaN(n)) return esc(String(v));
+    return n.toLocaleString();
+  }
+
+  function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function renderHelp() {
+    const host = WIDGET_HOST;
+    app.innerHTML = `
+      <div class="gs-panel gs-header">
+        <div class="gs-panel-inner">
+          <div class="lambda">λ</div>
+          <div class="header-text">
+            <div class="header-title">POTA STATS // GOLDSRC</div>
+            <div class="header-sub">HELP &amp; EMBEDDING GUIDE</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="gs-panel">
+        <div class="gs-panel-inner help-section">
+          <h2>► EMBED ON YOUR QRZ PAGE</h2>
+          <p>Edit your QRZ biography, click the "Source" button in the editor,
+          and paste one of the snippets below. Replace <code>YOURCALL</code> with your callsign.</p>
+
+          <p style="color:var(--text-amber);">NORMAL VERSION</p>
+          <div class="code-block">&lt;p&gt;&lt;iframe src="https://${esc(host)}/?call=YOURCALL" height="600" width="960" frameborder="0" scrolling="no"&gt;&lt;/iframe&gt;&lt;/p&gt;</div>
+
+          <p style="color:var(--text-amber);">CONDENSED VERSION</p>
+          <div class="code-block">&lt;p&gt;&lt;iframe src="https://${esc(host)}/?call=YOURCALL&amp;options=condensed" height="320" width="960" frameborder="0" scrolling="no"&gt;&lt;/iframe&gt;&lt;/p&gt;</div>
+
+          <p style="color:var(--text-amber);">HUNTER ONLY</p>
+          <div class="code-block">&lt;p&gt;&lt;iframe src="https://${esc(host)}/?call=YOURCALL&amp;options=hunteronly" height="400" width="960" frameborder="0" scrolling="no"&gt;&lt;/iframe&gt;&lt;/p&gt;</div>
+
+          <p style="color:var(--text-amber);">ACTIVATOR ONLY</p>
+          <div class="code-block">&lt;p&gt;&lt;iframe src="https://${esc(host)}/?call=YOURCALL&amp;options=activatoronly" height="400" width="960" frameborder="0" scrolling="no"&gt;&lt;/iframe&gt;&lt;/p&gt;</div>
+
+          <p style="color:var(--text-amber);">ACTIVATOR ONLY + CONDENSED</p>
+          <div class="code-block">&lt;p&gt;&lt;iframe src="https://${esc(host)}/?call=YOURCALL&amp;options=activatoronly,condensed" height="240" width="960" frameborder="0" scrolling="no"&gt;&lt;/iframe&gt;&lt;/p&gt;</div>
+
+          <div class="gs-sep" style="margin: 16px 0;"></div>
+
+          <h2>► URL PARAMETERS</h2>
+          <ul>
+            <li><code>call</code> — Your callsign (required)</li>
+            <li><code>options</code> — Comma-separated: <code>condensed</code>, <code>hunteronly</code>, <code>activatoronly</code></li>
+            <li><code>help</code> — Show this page</li>
+          </ul>
+
+          <div class="gs-sep" style="margin: 16px 0;"></div>
+
+          <h2>► EXAMPLES</h2>
+          <ul>
+            <li><code>?call=W1AW</code></li>
+            <li><code>?call=W1AW&amp;options=condensed</code></li>
+            <li><code>?call=W1AW&amp;options=hunteronly,condensed</code></li>
+          </ul>
+
+          <div class="gs-sep" style="margin: 16px 0;"></div>
+
+          <h2>► ABOUT</h2>
+          <p>Open-source POTA stats widget with a GoldSource engine theme.<br>
+          Data pulled live from <code>api.pota.app</code>. No data is stored server-side.<br>
+          Inspired by <a href="https://pota-stats.wd4dan.net/?help" target="_blank" rel="noopener" style="color:var(--text-amber);">WD4DAN's POTA Stats</a>.</p>
+          <p style="color:var(--text-gray);font-size:11px;margin-top:12px;">
+            Source: <a href="https://github.com/Bremblo/potastats" target="_blank" rel="noopener" style="color:var(--text-amber-dim);">github.com/Bremblo/potastats</a>
+            &nbsp;&middot;&nbsp; 73 de Conor
+          </p>
+        </div>
+      </div>
+
+      <div class="gs-footer">
+        GOLDSRC POTA STATS &middot;
+        <a href="https://${esc(host)}" target="_blank" rel="noopener">${esc(host)}</a>
+      </div>
+    `;
+  }
+
+})();
+</script>
+</body>
+</html>
