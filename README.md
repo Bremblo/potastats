@@ -66,7 +66,7 @@ After deploying, Wrangler will give you a URL like `potastats.YOUR-SUBDOMAIN.wor
 
 ### Custom Domain (Optional)
 
-To use a custom domain like `potastats.conorschall.com`:
+To use a custom domain like `potastats.domain.com`:
 
 1. Add your domain to Cloudflare DNS
 2. Uncomment and edit the `routes` section in `wrangler.toml`
@@ -100,5 +100,3 @@ The POTA API isn't formally documented, so the worker probes multiple endpoint p
 ## License
 
 MIT
-
-73 de Conor, KF8CNK
