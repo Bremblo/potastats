@@ -18,6 +18,12 @@ export default {
     const isHunterOnly = options.includes('hunteronly');
     const isActivatorOnly = options.includes('activatoronly');
     const showHelp = params.has('help');
+    const showDiscover = params.has('discover');
+
+    // Discover mode — probe all endpoints and show raw results
+    if (showDiscover && callsign) {
+      return await discoverEndpoints(callsign);
+    }
 
     // Help page or no callsign
     if (showHelp || !callsign) {
@@ -39,27 +45,44 @@ export default {
       return htmlResponse(renderPage(errorContent(callsign, 'Could not retrieve stats. Verify callsign is registered at pota.app'), isCondensed));
     }
 
-    // 2. Recent activations — probe endpoints
+    // 2. Recent activations — probe many possible endpoints
+    const call_enc = encodeURIComponent(callsign);
     const actEndpoints = [
-      `${API}/profile/activations/${encodeURIComponent(callsign)}`,
-      `${API}/profile/${encodeURIComponent(callsign)}/activations`,
-      `${API}/user/activations/${encodeURIComponent(callsign)}`,
+      `${API}/profile/${call_enc}/activations`,
+      `${API}/profile/activations/${call_enc}`,
+      `${API}/activator/activations/${call_enc}`,
+      `${API}/activator/${call_enc}/activations`,
+      `${API}/activator/${call_enc}`,
+      `${API}/stats/activator/${call_enc}`,
+      `${API}/stats/user/${call_enc}/activations`,
+      `${API}/user/${call_enc}/activations`,
+      `${API}/user/activations/${call_enc}`,
+      `${API}/profile/${call_enc}`,
     ];
     for (const ep of actEndpoints) {
       try {
         const r = await fetch(ep);
         if (r.ok) {
           const d = await r.json();
+          // Could be array of activations or an object with an activations property
           if (Array.isArray(d) && d.length > 0) { activations = d; break; }
+          if (d && d.activations && Array.isArray(d.activations)) { activations = d.activations; break; }
         }
       } catch (e) { /* try next */ }
     }
 
-    // 3. Recent hunter QSOs — probe endpoints
+    // 3. Recent hunter QSOs — probe many possible endpoints
     const huntEndpoints = [
-      `${API}/profile/hunter/qsos/${encodeURIComponent(callsign)}`,
-      `${API}/profile/${encodeURIComponent(callsign)}/hunter/qsos`,
-      `${API}/user/hunter/${encodeURIComponent(callsign)}`,
+      `${API}/profile/${call_enc}/hunter/qsos`,
+      `${API}/profile/hunter/qsos/${call_enc}`,
+      `${API}/hunter/${call_enc}/qsos`,
+      `${API}/hunter/qsos/${call_enc}`,
+      `${API}/hunter/${call_enc}`,
+      `${API}/stats/hunter/${call_enc}`,
+      `${API}/stats/user/${call_enc}/hunter`,
+      `${API}/user/${call_enc}/hunter/qsos`,
+      `${API}/user/hunter/${call_enc}`,
+      `${API}/profile/${call_enc}/hunter`,
     ];
     for (const ep of huntEndpoints) {
       try {
@@ -67,12 +90,33 @@ export default {
         if (r.ok) {
           const d = await r.json();
           if (Array.isArray(d) && d.length > 0) { hunterQsos = d; break; }
+          if (d && d.qsos && Array.isArray(d.qsos)) { hunterQsos = d.qsos; break; }
+        }
+      } catch (e) { /* try next */ }
+    }
+
+    // 4. Awards
+    let awards = null;
+    const awardEndpoints = [
+      `${API}/profile/${call_enc}/awards`,
+      `${API}/profile/awards/${call_enc}`,
+      `${API}/user/${call_enc}/awards`,
+      `${API}/user/awards/${call_enc}`,
+      `${API}/stats/user/${call_enc}/awards`,
+    ];
+    for (const ep of awardEndpoints) {
+      try {
+        const r = await fetch(ep);
+        if (r.ok) {
+          const d = await r.json();
+          if (Array.isArray(d) && d.length > 0) { awards = d; break; }
+          if (d && d.awards && Array.isArray(d.awards)) { awards = d.awards; break; }
         }
       } catch (e) { /* try next */ }
     }
 
     // Build body
-    const body = buildBody(callsign, stats, activations, hunterQsos, { isCondensed, isHunterOnly, isActivatorOnly });
+    const body = buildBody(callsign, stats, activations, hunterQsos, awards, { isCondensed, isHunterOnly, isActivatorOnly });
     return htmlResponse(renderPage(body, isCondensed));
   }
 };
@@ -89,7 +133,7 @@ function htmlResponse(html) {
 }
 
 // ─── Build the main stats body ───
-function buildBody(call, stats, activations, hunterQsos, opts) {
+function buildBody(call, stats, activations, hunterQsos, awards, opts) {
   const act = stats.activator || {};
   const hunt = stats.hunter || {};
   const name = stats.name || '';
@@ -157,6 +201,11 @@ function buildBody(call, stats, activations, hunterQsos, opts) {
     if (hunterQsos && hunterQsos.length > 0) {
       html += renderHunterTable(hunterQsos);
     }
+  }
+
+  // Awards
+  if (awards && awards.length > 0 && !opts.isCondensed) {
+    html += renderAwardsSection(awards);
   }
 
   // Footer
@@ -249,6 +298,113 @@ function renderHunterTable(rows) {
   `;
 }
 
+// ─── Awards Section ───
+function renderAwardsSection(awards) {
+  let totalAwards = 0;
+  let totalEndorsements = 0;
+
+  let rows = '';
+  for (const a of awards) {
+    const name = v(a, 'name', 'title', 'award', 'awardName') || 'Unknown';
+    const granted = v(a, 'grantedDate', 'granted_date', 'granted', 'date') || '';
+    const endorsements = v(a, 'endorsements', 'endorsement_count', 'endorsementCount') || 0;
+
+    totalAwards++;
+    totalEndorsements += Number(endorsements) || 0;
+
+    rows += `<tr>
+      <td>${esc(fmtDate(granted))}</td>
+      <td>${esc(name)}</td>
+      <td class="num">${dash(endorsements)}</td>
+    </tr>`;
+  }
+
+  return `
+    <div class="gs-panel"><div class="gs-panel-inner">
+      <div class="section-title">AWARDS: ${totalAwards} &nbsp;&nbsp;&nbsp; ENDORSEMENTS: ${totalEndorsements}</div>
+      <table class="gs-table">
+        <thead><tr>
+          <th>Granted</th><th>Award</th><th class="right">Endorsements</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div></div>
+  `;
+}
+
+// ─── Discover Endpoints (debug tool) ───
+async function discoverEndpoints(call) {
+  const call_enc = encodeURIComponent(call);
+  const endpoints = [
+    `${API}/stats/user/${call_enc}`,
+    `${API}/profile/${call_enc}`,
+    `${API}/profile/${call_enc}/activations`,
+    `${API}/profile/activations/${call_enc}`,
+    `${API}/profile/${call_enc}/hunter`,
+    `${API}/profile/${call_enc}/hunter/qsos`,
+    `${API}/profile/hunter/qsos/${call_enc}`,
+    `${API}/profile/${call_enc}/awards`,
+    `${API}/profile/awards/${call_enc}`,
+    `${API}/activator/${call_enc}`,
+    `${API}/activator/activations/${call_enc}`,
+    `${API}/activator/${call_enc}/activations`,
+    `${API}/hunter/${call_enc}`,
+    `${API}/hunter/${call_enc}/qsos`,
+    `${API}/hunter/qsos/${call_enc}`,
+    `${API}/user/${call_enc}`,
+    `${API}/user/${call_enc}/activations`,
+    `${API}/user/${call_enc}/hunter`,
+    `${API}/user/${call_enc}/hunter/qsos`,
+    `${API}/user/${call_enc}/awards`,
+    `${API}/user/activations/${call_enc}`,
+    `${API}/user/hunter/${call_enc}`,
+    `${API}/user/awards/${call_enc}`,
+    `${API}/stats/activator/${call_enc}`,
+    `${API}/stats/hunter/${call_enc}`,
+    `${API}/stats/user/${call_enc}/activations`,
+    `${API}/stats/user/${call_enc}/hunter`,
+    `${API}/stats/user/${call_enc}/awards`,
+  ];
+
+  let results = '';
+  for (const ep of endpoints) {
+    try {
+      const r = await fetch(ep);
+      const status = r.status;
+      let preview = '';
+      if (r.ok) {
+        const text = await r.text();
+        // Truncate for display
+        preview = text.substring(0, 300);
+        results += `<div style="margin-bottom:12px;">
+          <div style="color:var(--text-green);font-weight:bold;">✓ ${status} — ${esc(ep)}</div>
+          <pre style="color:var(--text-white);font-size:10px;overflow-x:auto;white-space:pre-wrap;word-break:break-all;padding:4px;background:var(--bg-dark);border:1px solid var(--border-inner);max-height:120px;overflow-y:auto;">${esc(preview)}${text.length > 300 ? '...' : ''}</pre>
+        </div>`;
+      } else {
+        results += `<div style="margin-bottom:4px;color:var(--text-gray);">✗ ${status} — ${esc(ep)}</div>`;
+      }
+    } catch (e) {
+      results += `<div style="margin-bottom:4px;color:#ff4444;">✗ ERR — ${esc(ep)} — ${esc(e.message)}</div>`;
+    }
+  }
+
+  const body = `
+    <div class="gs-panel gs-header"><div class="gs-panel-inner">
+      <div class="lambda">λ</div>
+      <div class="header-text">
+        <div class="header-title">API ENDPOINT DISCOVERY</div>
+        <div class="header-sub">PROBING POTA.APP FOR ${esc(call)}</div>
+      </div>
+    </div></div>
+    <div class="gs-panel"><div class="gs-panel-inner" style="font-size:11px;">
+      <p style="color:var(--text-amber);margin-bottom:12px;">Green = returned data. Gray = 404/error. Copy working endpoints into src/index.js.</p>
+      ${results}
+    </div></div>
+  `;
+
+  return htmlResponse(renderPage(body, false));
+}
+
 // ─── Help Content ───
 function helpContent() {
   const h = WIDGET_HOST;
@@ -284,6 +440,7 @@ function helpContent() {
         <li><code>call</code> — Your callsign (required)</li>
         <li><code>options</code> — Comma-separated: <code>condensed</code>, <code>hunteronly</code>, <code>activatoronly</code></li>
         <li><code>help</code> — This page</li>
+        <li><code>discover</code> — Probe all POTA API endpoints and show what works (debug tool)</li>
       </ul>
 
       <div class="gs-sep" style="margin:16px 0;"></div>
