@@ -1,0 +1,8 @@
+name = "potastats"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+# Optional: add a custom domain route
+# routes = [
+#   { pattern = "potastats.conorschall.com", custom_domain = true }
+# ]
