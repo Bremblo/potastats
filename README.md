@@ -20,7 +20,7 @@ Inspired by [WD4DAN's POTA Stats widget](https://pota-stats.wd4dan.net/?help).
 Drop `index.html` on any static host. That's it.
 
 ```
-your-site.com/pota-stats/index.html
+bremblo.github.io/potastats/index.html
 ```
 
 ### Quick options
@@ -37,7 +37,7 @@ your-site.com/pota-stats/index.html
 Edit the `WIDGET_HOST` variable near the top of the `<script>` block to match your domain:
 
 ```javascript
-const WIDGET_HOST = 'conorschall.com/pota-stats';
+const WIDGET_HOST = 'bremblo.github.io/potastats';
 ```
 
 This controls the links shown in the footer and help page.
@@ -69,12 +69,12 @@ Combine them: `?call=W1AW&options=activatoronly,condensed`
 
 **Normal:**
 ```html
-<p><iframe src="https://conorschall.com/pota-stats/?call=YOURCALL" height="600" width="960" frameborder="0" scrolling="no"></iframe></p>
+<p><iframe src="https://bremblo.github.io/potastats/?call=YOURCALL" height="600" width="960" frameborder="0" scrolling="no"></iframe></p>
 ```
 
 **Condensed:**
 ```html
-<p><iframe src="https://conorschall.com/pota-stats/?call=YOURCALL&options=condensed" height="320" width="960" frameborder="0" scrolling="no"></iframe></p>
+<p><iframe src="https://bremblo.github.io/potastats/?call=YOURCALL&options=condensed" height="320" width="960" frameborder="0" scrolling="no"></iframe></p>
 ```
 
 You may need to adjust `height` depending on your data and layout.
